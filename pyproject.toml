@@ -1,0 +1,20 @@
+[project]
+name = "parabolic-mirror"
+version = "0.1.0"
+description = "Wave propagation experiments for off-axis parabolic mirror reflection"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "diffractio>=0.2.0",
+    "matplotlib>=3.11.0",
+    "numba>=0.61.0",
+    "numpy",
+    "scipy>=1.18.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/optics_lib"]
