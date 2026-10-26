@@ -6,6 +6,11 @@ and introductory optics (plane waves, Fourier transforms, the idea of an angular
 spectrum). Every non-obvious step is derived. Symbols are defined the first time
 they appear.
 
+**Where things live.** The three notebooks are the reference implementation: off-axis
+segment, exact ray/surface intersection, Fresnel reflection, the wavefront statistics of
+§9.4. The `src/` modules (§8–9) are an earlier version for the on-axis parent only
+(ideal conductor, parent-pupil sampling in the tilt path); they need `scipy`.
+
 Throughout, a **carat** denotes a unit vector ($\hat{\mathbf u}$), boldface a
 3-vector ($\mathbf r$), and $k = 2\pi/\lambda$ is the wavenumber.
 
@@ -56,7 +61,7 @@ hand-fitted coma/astigmatism.
 The **output basis** $(\hat{\mathbf u},\hat{\mathbf v},\hat{\mathbf w})$ is an
 orthonormal triad with $\hat{\mathbf u}$ the nominal outgoing direction and
 $\hat{\mathbf v},\hat{\mathbf w}$ transverse to it. For the aligned parent used in
-the tests, $\hat{\mathbf u}=\hat{\mathbf z}$, $\hat{\mathbf v}=\hat{\mathbf x}$,
+`src/`, $\hat{\mathbf u}=\hat{\mathbf z}$, $\hat{\mathbf v}=\hat{\mathbf x}$,
 $\hat{\mathbf w}=\hat{\mathbf y}$; for the 90°-folded lab layout it is
 $\hat{\mathbf u}=\hat{\mathbf x}$ etc. The equations below are written in the
 $(u,v,w)$ basis so they are reusable for any orientation.
@@ -73,8 +78,8 @@ $$
 $$
 Its focus sits on the axis at $\mathbf r_{\text{focus}}=(0,0,f)$. (Careful: the
 commercial "reflected focal length" $\approx 15$ mm is a *different* number — the
-distance from the off-axis piece to the focus — and must **not** be put into the
-surface equation. See §5.1.)
+distance from the off-axis piece to the focus, $f+\rho_0^2/4f=2f$ for a 90° OAP — and
+must **not** be put into the surface equation.)
 
 ### 2.2 Normal from the gradient
 
@@ -126,7 +131,7 @@ $\mathbf E_i=\hat{\mathbf x}$): $\mathbf E_r=-\hat{\mathbf x}$ — the tangentia
 field flips sign on reflection off a conductor, as it must ($\pi$ phase shift).
 This is an **ideal-conductor** model: it treats $s$- and $p$-polarised light
 identically. A real metal coating at ~45° gives a small $s$–$p$ phase difference;
-we deliberately isolate this function so it can be replaced later (§12).
+the notebooks replace it by the Fresnel $s/p$ form (step-by-step and perfect-vs-gold).
 
 ### 3.3 The reflected field is transverse to the reflected ray
 
@@ -138,8 +143,8 @@ $$
 \hat{\mathbf e}_r\!\cdot\!\mathbf E_r=-(\hat{\mathbf e}_i\!\cdot\!\mathbf E_i).
 $$
 So **if the incident field is transverse** ($\hat{\mathbf e}_i\!\cdot\!\mathbf E_i=0$),
-the reflected field is transverse too. Good — the model is self-consistent. (This
-identity is `test_transversality` in `test_oap_core.py`, verified to $10^{-13}$.)
+the reflected field is transverse too. Good — the model is self-consistent. (The
+notebooks check it numerically to machine precision.)
 
 ---
 
@@ -157,8 +162,7 @@ $$
 $$
 Starting from the mirror point $\mathbf r_m=(x_p,y_p,\rho^2/4f)$ and travelling a
 distance $s=(4f^2+\rho^2)/(4f)$ along $\hat{\mathbf e}_r$ lands you at exactly
-$(0,0,f)$ — the focus — for **every** pupil point. (This is `test_rays_hit_focus`,
-error $\sim10^{-17}$.)
+$(0,0,f)$ — the focus — for **every** pupil point.
 
 **(b) Equal optical path (constant OPD).** Put the input reference plane at
 $z=z_0$. The input leg (travelling $-\hat{\mathbf z}$) to the mirror has length
@@ -173,7 +177,7 @@ L_{\text{total}}=L_{\text{in}}+R=z_0+f=\text{constant, independent of }(x_p,y_p)
 $$
 A constant path means every part of the beam arrives at the focus **in phase** —
 that is the definition of an aberration-free (stigmatic) focus. This is why an
-*on-axis* parabola has no spherical aberration, unlike a thin lens. (`test_constant_opd`.)
+*on-axis* parabola has no spherical aberration, unlike a thin lens.
 
 ### 4.2 Pupil radius ↔ ray angle: $\rho = 2f\tan(\theta/2)$
 
@@ -199,13 +203,16 @@ $\sin\theta$, hence not linear in transverse $k$.
 ### 4.3 Why not a quadratic lens phase?
 
 A thin-lens phase $\exp(-ikr^2/2f)$ is the *paraxial* (small-angle) approximation
-of a focusing element. This optic is fast ($f/\#\approx 2f_{\text{parent}}/D\approx1.2$,
-$\mathrm{NA}\approx0.7$), so paraxial is badly violated:
+of a focusing element. This optic is fast ($\text{RFL}/D=2f_{\text{parent}}/D\approx1.2$), so paraxial is badly
+violated. (Its NA depends on the definition: the catalogue value
+$\sin\arctan(D/2\,\text{RFL})\approx0.39$; the real cone of the segment is asymmetric
+and reaches ≈40° from the mean ray; a disc of the same diameter centred on the parent
+axis has $\sin(2\arctan(D/4f))\approx0.72$.)
 
 * the quadratic phase would inject spurious **spherical aberration** the real
   parabola does not have;
 * it cannot represent the **90° fold**, the **longitudinal** field component
-  $E_z$ that appears at high NA, or the **coma** produced by misalignment.
+  $E_z$ that appears at high NA, or the aberrations produced by misalignment.
 
 All three are visible in the figures and come out *for free* from the 3-D geometry.
 
@@ -364,8 +371,8 @@ arrays directly. The **well-conditioned** fix is a *pull-back*:
 
 The transform $\mathbf E(v,w)=\sum P\,e^{i(k_v v+k_w w)}\,\Delta k_v\Delta k_w$ is
 implemented as an **exact separable matrix-DFT** (two dense matrix products). It is
-$O(N^3)$ — fine to ~$512^2$ — and its sign/scaling are *proved* against a
-brute-force 4-index sum (`test_transform_vs_bruteforce`, relative error $2\times10^{-16}$).
+$O(N^3)$ — fine to ~$512^2$ — and its sign is $e^{+i\mathbf k\cdot\mathbf r}$ by
+construction (the kernel is written out explicitly).
 Replacing it with the host library's Bluestein CZT would give $O(N^2\log N)$ but
 requires matching that routine's internal sign to this reference first.
 
@@ -382,8 +389,10 @@ $$
 The scattered directions $(k_v,k_w)$ come straight from the real reflected rays.
 This is a **non-uniform DFT**; it is evaluated exactly as two dense matrix products
 (no scattered interpolation, no sign ambiguity), at cost $O(N_{\text{pupil}}N_{\text{out}})$.
-On the aligned vortex it reproduces route A to relative $L_2 = 0$ (a sanity check
-you should keep).
+On the aligned vortex it agrees with route A to a relative $L_2$ of order
+$10^{-4}$–$10^{-3}$ after matching one global complex constant (the two routes drop
+different constant prefactors); the residual depends on sampling, since route A
+interpolates the input field. Not exact, but a sanity check worth keeping.
 
 ### 9.1 The optical-path (aberration) phase
 
@@ -398,8 +407,9 @@ L=\underbrace{(\mathbf r_m-\mathbf p_{\text{ref}})\!\cdot\!\hat{\mathbf e}_i}_{\
 $$
 The second term is the path from the mirror to the plane through the focus $\mathbf F$
 perpendicular to the ray (the standard Debye reference). For the aligned parent
-$L$ is constant (§4.1) and $\varphi_{\text{OPD}}=0$; when tilted, its cubic-in-pupil
-part is **coma**. Subtracting the mean $\langle L\rangle$ removes only the
+$L$ is constant (§4.1) and $\varphi_{\text{OPD}}=0$; when tilted, its variation across
+the pupil is the aberration. Which terms dominate depends on the geometry and the
+illumination, so read it off the computed wavefront rather than assuming it. Subtracting the mean $\langle L\rangle$ removes only the
 irrelevant piston.
 
 ### 9.2 Where is the focus? Least-squares ray crossing
@@ -415,7 +425,7 @@ $$
 =\sum_i(\mathbb 1-\hat{\mathbf e}_{r,i}\hat{\mathbf e}_{r,i}^\top)\,\mathbf r_{m,i} .
 $$
 We also set $\hat{\mathbf u}$ to the mean reflected direction, so the ~$2\alpha$
-beam walk-off is removed and the residual **coma** is what you see.
+beam walk-off is removed from the display.
 
 ### 9.3 Why *not* the rigidly-transformed focus $R\,(0,0,f)+\mathbf t$
 
@@ -425,8 +435,28 @@ equivalent to illuminating the parabola off-axis, which has no stigmatic focus.
 The chief ray reflected off the tilted vertex does *not* pass through
 $R(0,0,f)+\mathbf t$. Using that point as the reference injects a huge spurious
 tilt into $\varphi_{\text{OPD}}$ (hundreds of waves), which is a bug, not physics.
-The least-squares focus fixes it and restores the linear-in-angle coma expected on
-physical grounds.
+The least-squares focus removes most of it. It is a geometric estimate, though, so
+$\varphi_{\text{OPD}}$ still contains some tilt and focus shift; §9.4 removes them
+exactly before computing any figure of merit.
+
+### 9.4 Wavefront statistics: RMS and Strehl
+
+All notebooks use one function, `wavefront_stats`. Moving the observation point by
+$(\delta v,\delta w,\delta u)$ multiplies each plane wave by
+$e^{i(k_v\delta v+k_w\delta w+k_u\delta u)}$, so piston and the parts of
+$\varphi_{\text{OPD}}$ linear in $(k_v,k_w,k_u)$ only *move* the spot (pointing and focus
+shift); they do not blur it. They are removed by a least-squares fit weighted by $a^2$,
+where $a=|E_{\text{in}}|\sqrt J$ is the ray amplitude in the Debye sum. From the residual
+$\varphi_{\text{res}}$:
+$$
+\sigma=\frac{1}{2\pi}\sqrt{\frac{\sum a^2\varphi_{\text{res}}^2}{\sum a^2}},\qquad
+S=\frac{\big|\sum a\,e^{i\varphi_{\text{res}}}\big|^2}{\big(\sum a\big)^2}.
+$$
+$S$ is exactly (in the scalar Debye picture) the intensity at the best point over the
+peak of the unaberrated focus with the same input. It weights by amplitude and $\sigma$
+by intensity, so $S\approx e^{-(2\pi\sigma)^2}$ holds only roughly for non-uniform
+beams. The fitted $(\delta v,\delta w,\delta u)$ is returned too: a fixed detector sees
+the spot move by that much in addition to the loss in $S$.
 
 ---
 
@@ -437,27 +467,37 @@ physical grounds.
   *transverse* kernel. The OAP output transform uses $\exp(+i(k_vv+k_ww))$ — the
   **converging-wave** sign, dictated by the physics of §5.2 and validated
   numerically. These are different operators; do not copy signs blindly between them.
-* **Absolute scale.** We dropped global constants ($f$, powers of $k$). The code is
-  correct up to one overall real factor; use the power-conservation test to pin it
-  if you need radiometric intensities. Relative structure and power *stability* are
-  validated (`test_power_stability`, drift $<0.1\%$ across resolution). Note: at
-  high NA the power is **not** $\int|E|^2$ over the focal plane — compare in
-  $k$-space with the $d\Omega$ measure, or use the axial Poynting component.
+* **Absolute scale.** With the energy-conserving weight $\sqrt{J}$, $J=d\Omega/dA$, the
+  Debye–Wolf field is
+  $\mathbf E=\frac{-i}{\lambda}\sum\mathbf E_r\sqrt J\,e^{i\varphi}e^{i(k_vv+k_ww)}\,\Delta A$
+  (up to the constant phase $e^{ikf}$), so $|\mathbf E|^2$ is in the units of
+  $|E_{\text{in}}|^2$. The step-by-step notebook includes the $-i/\lambda$; the other
+  notebooks and `src/` drop it (and `src/` other constants), so their intensities are
+  relative. Note: at high NA the power is **not** $\int|E|^2$ over the focal plane —
+  compare in $k$-space with the $d\Omega$ measure, or use the axial Poynting component.
+* **Input field.** $E_{\text{in}}(x,y)$ is the field in a plane just in front of the
+  mirror, carried to the surface along the fixed direction $\hat{\mathbf e}_i$: each
+  ray is sampled at its own $(x,y)$. Phase gradients of $E_{\text{in}}$ enter only as
+  phase, not as ray directions, so the beam must be locally close to collimated along
+  $\hat{\mathbf e}_i$. A field with strong phase gradients (e.g. after an SLM and a
+  lens) must first be propagated to the mirror (e.g. angular-spectrum method).
 
 ---
 
 ## 11. Approximations, and what to make rigorous next
 
-1. **Ideal-conductor reflection** (§3.2): equal $s$/$p$. Replace `reflect_vector_field`
-   with Fresnel coefficients for a real coating at ~45°.
-2. **Parent-pupil sampling** in the tilt path — see
-   `docs/pupil_coordinate_approximation.md`. Second-order for a few degrees, but the
-   first thing to fix for *quantitative* tilt results.
-3. **On-axis parent, not yet an off-centre commercial OAP.** The `OAP` object holds
-   $R,\mathbf t$ and a general output basis, so this is wiring, not new physics:
-   define the sub-aperture (off-centre circle on the parent, or from the mechanical
-   drawing) and mask it.
-4. **Speed**: swap the exact $O(N^3)$ / $O(N_{\text{pupil}}N_{\text{out}})$
+1. **Reflection model.** `src/` and the tilt notebook use the ideal conductor (§3.2);
+   the step-by-step and perfect-vs-gold notebooks use Fresnel $r_s,r_p$ for a complex
+   index.
+2. **Parent-pupil sampling** in `src/oap_tilt.py`: the input is sampled at the parent
+   coordinate of each mirror point instead of at the ray's own transverse coordinate.
+   The notebooks trace each ray to the surface exactly (closed-form, cancellation-free
+   quadratic root), so they do not make this approximation.
+3. **Geometry.** `src/` models the on-axis parent only; the notebooks model the
+   off-axis segment with a body-fixed circular aperture in the mirror-local $y_p$–$z_p$
+   plane and rigid tilt/shift about a mount point.
+4. **Input.** Collimated along $\hat{\mathbf e}_i$ (§10).
+5. **Speed**: swap the exact $O(N^3)$ / $O(N_{\text{pupil}}N_{\text{out}})$
    transforms for the host Bluestein CZT (route A) or a NUFFT (route B).
 
 ---

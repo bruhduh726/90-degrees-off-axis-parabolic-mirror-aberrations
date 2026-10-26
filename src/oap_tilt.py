@@ -14,7 +14,7 @@ evaluated as two dense matmuls (a nonuniform DFT), so there is no scattered
 interpolation and the sign is fixed by construction. O(N_pupil * N_out).
 
 Output basis: by default tracked to the tilted CHIEF ray, so the ~2*alpha beam
-walk-off (millimetres) is removed and the residual -- coma -- is visible in a
+walk-off (millimetres) is removed and the residual aberration is visible in a
 micron window. The bulk pointing shift is real but is pure tip/tilt; recentering
 is the standard way to inspect the aberration it leaves behind.
 """
